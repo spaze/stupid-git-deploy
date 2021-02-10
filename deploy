@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+ROOT=/srv/www
+SITEDIR=site
+VENDORDIR=$SITEDIR/vendor
+COMPOSERLOCK=$SITEDIR/composer.lock
+COMPOSERJSON=$SITEDIR/composer.json
+VENDORIGNORE=$VENDORDIR/.gitignore
+CACHEDIR=$SITEDIR/temp/cache
+
+if [ $# -eq 0 ]; then
+    echo "$0 <site>, where site is:"
+    ls -1 $ROOT
+    exit 1
+fi
+
+if [ ! -d "$ROOT/$1" ]; then
+    echo "Site $1 doesn't exist"
+    exit 2
+fi
+
+BOLD=$(tput bold)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+GRAY=$(tput setaf 243)  # will only work with TERM=xterm-256color
+NORMAL=$(tput sgr0)
+
+echo "${BOLD}Deploying ${GREEN}$1${NORMAL}"
+
+cd $ROOT/$1
+
+for I in docs conf; do
+    if [ -x "./$I/deploy/init" ]; then
+	./$I/deploy/init
+	RETVAL=$?
+	if [ ! $RETVAL -eq 0 ]; then
+	    echo "$I/deploy/init returned error $RETVAL, exiting"
+	    exit
+	fi
+    elif [ -f "./$I/deploy/init" ]; then
+	echo "$I/deploy/init exists but it's not executable, skipping"
+    fi
+done
+
+export GIT_SSH_KEY=$HOME/.ssh/web-$1.key
+export GIT_SSH=$HOME/bin/git_ssh_wrapper
+git fetch
+git reset origin/master --hard
+git submodule update --init --recursive
+
+if [ -f "$COMPOSERLOCK" ] && [ -f "$VENDORIGNORE" ]; then
+    cd $SITEDIR
+    composer install --no-dev
+    echo "${BOLD}Composer dependencies installed${NORMAL}"
+    cd - > /dev/null
+fi
+
+if [ -d "$CACHEDIR" ]; then
+    sudo rm -r $CACHEDIR
+    echo "${BOLD}Cache purged${NORMAL}"
+fi
+
+if [ -f "$COMPOSERJSON" ]; then
+    DEV_DEPS=$(jq --raw-output '."require-dev" | keys[]' $COMPOSERJSON)
+    PHPSTAN="phpstan/phpstan"
+    PHPSTAN_BOOTSTRAP="${VENDORDIR}/${PHPSTAN}/bootstrap.php"
+    if [ $? -ne 0 ]; then
+	echo "${GRAY}No dev dependencies found in $COMPOSERJSON${NORMAL}"
+    else
+	echo "${BOLD}Removing dev dependencies${NORMAL}"
+	shopt -s dotglob
+	for DEP in $DEV_DEPS; do
+	    if [ ! -d "./$VENDORDIR/$DEP" ]; then
+		continue
+	    fi
+	    RECREATE_PHPSTAN_BOOTSTRAP=0
+	    if [ "$DEP" = "$PHPSTAN" ] && [ -f "$PHPSTAN_BOOTSTRAP" ]; then
+		RECREATE_PHPSTAN_BOOTSTRAP=1
+	    fi
+	    rm -rf ./$VENDORDIR/$DEP/*
+	    echo "Removed by $0" > ./$VENDORDIR/$DEP/REMOVED-BY-DEPLOY
+	    echo "├ $DEP removed"
+	    if [ $RECREATE_PHPSTAN_BOOTSTRAP -eq 1 ]; then
+		echo "<?php // $PHPSTAN_BOOTSTRAP re-created empty by $0, required by composer/autoload_files.php" > $PHPSTAN_BOOTSTRAP
+		echo "│ └ ${GRAY}$PHPSTAN_BOOTSTRAP re-created, required by composer/autoload_files.php${NORMAL}"
+	    fi
+	done
+	echo "└ ${BOLD}Done${NORMAL}"
+	shopt -u dotglob
+    fi
+else
+    echo "${GRAY}Not removing dev dependencies, $COMPOSERJSON not found${NORMAL}"
+fi
+
+
+curl \
+--location \
+--silent \
+--output /dev/null \
+--user-agent "Deploy McDeploymentface" \
+--write-out "%{url_effective} -> HTTP %{http_code} (in %{time_total}s)\n" \
+$1 | sed "s/\(HTTP 2[0-9]\+\)/${BOLD}${GREEN}\\1${NORMAL}/" | sed "s/\(HTTP 5[0-9]\+\)/${BOLD}${RED}\\1 FAILURE${NORMAL}/"
+
+echo "${BOLD}${GREEN}$1 successfully deployed${NORMAL}"
