@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 ROOT=/srv/www
-SITEDIR=site
-VENDORDIR=$SITEDIR/vendor
-COMPOSERLOCK=$SITEDIR/composer.lock
-COMPOSERJSON=$SITEDIR/composer.json
-VENDORIGNORE=$VENDORDIR/.gitignore
-CACHEDIR=$SITEDIR/temp/cache
+SITE_DIR=site
+VENDOR_DIR=$SITE_DIR/vendor
+COMPOSER_LOCK=$SITE_DIR/composer.lock
+COMPOSER_JSON=$SITE_DIR/composer.json
+VENDOR_IGNORE=$VENDOR_DIR/.gitignore
+CACHE_DIR=$SITE_DIR/temp/cache
 
 if [ $# -eq 0 ]; then
     echo "$0 <site>, where site is:"
@@ -32,9 +32,9 @@ cd $ROOT/$1
 for I in docs conf; do
     if [ -x "./$I/deploy/init" ]; then
 	./$I/deploy/init
-	RETVAL=$?
-	if [ ! $RETVAL -eq 0 ]; then
-	    echo "$I/deploy/init returned error $RETVAL, exiting"
+	RET_VAL=$?
+	if [ ! $RET_VAL -eq 0 ]; then
+	    echo "$I/deploy/init returned error $RET_VAL, exiting"
 	    exit
 	fi
     elif [ -f "./$I/deploy/init" ]; then
@@ -48,37 +48,37 @@ git fetch
 git reset origin/master --hard
 git submodule update --init --recursive
 
-if [ -f "$COMPOSERLOCK" ] && [ -f "$VENDORIGNORE" ]; then
-    cd $SITEDIR
+if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
+    cd $SITE_DIR
     composer install --no-dev
     echo "${BOLD}Composer dependencies installed${NORMAL}"
     cd - > /dev/null
 fi
 
-if [ -d "$CACHEDIR" ]; then
-    sudo rm -r $CACHEDIR
+if [ -d "$CACHE_DIR" ]; then
+    sudo rm -r $CACHE_DIR
     echo "${BOLD}Cache purged${NORMAL}"
 fi
 
-if [ -f "$COMPOSERJSON" ]; then
-    DEV_DEPS=$(jq --raw-output '."require-dev" | keys[]' $COMPOSERJSON)
+if [ -f "$COMPOSER_JSON" ]; then
+    DEV_DEPS=$(jq --raw-output '."require-dev" | keys[]' $COMPOSER_JSON)
     PHPSTAN="phpstan/phpstan"
-    PHPSTAN_BOOTSTRAP="${VENDORDIR}/${PHPSTAN}/bootstrap.php"
+    PHPSTAN_BOOTSTRAP="${VENDOR_DIR}/${PHPSTAN}/bootstrap.php"
     if [ $? -ne 0 ]; then
-	echo "${GRAY}No dev dependencies found in $COMPOSERJSON${NORMAL}"
+	echo "${GRAY}No dev dependencies found in $COMPOSER_JSON${NORMAL}"
     else
 	echo "${BOLD}Removing dev dependencies${NORMAL}"
 	shopt -s dotglob
 	for DEP in $DEV_DEPS; do
-	    if [ ! -d "./$VENDORDIR/$DEP" ]; then
+	    if [ ! -d "./$VENDOR_DIR/$DEP" ]; then
 		continue
 	    fi
 	    RECREATE_PHPSTAN_BOOTSTRAP=0
 	    if [ "$DEP" = "$PHPSTAN" ] && [ -f "$PHPSTAN_BOOTSTRAP" ]; then
 		RECREATE_PHPSTAN_BOOTSTRAP=1
 	    fi
-	    rm -rf ./$VENDORDIR/$DEP/*
-	    echo "Removed by $0" > ./$VENDORDIR/$DEP/REMOVED-BY-DEPLOY
+	    rm -rf ./$VENDOR_DIR/$DEP/*
+	    echo "Removed by $0" > ./$VENDOR_DIR/$DEP/REMOVED-BY-DEPLOY
 	    echo "├ $DEP removed"
 	    if [ $RECREATE_PHPSTAN_BOOTSTRAP -eq 1 ]; then
 		echo "<?php // $PHPSTAN_BOOTSTRAP re-created empty by $0, required by composer/autoload_files.php" > $PHPSTAN_BOOTSTRAP
@@ -89,7 +89,7 @@ if [ -f "$COMPOSERJSON" ]; then
 	shopt -u dotglob
     fi
 else
-    echo "${GRAY}Not removing dev dependencies, $COMPOSERJSON not found${NORMAL}"
+    echo "${GRAY}Not removing dev dependencies, $COMPOSER_JSON not found${NORMAL}"
 fi
 
 
