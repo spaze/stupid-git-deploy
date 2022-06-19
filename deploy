@@ -5,6 +5,7 @@ SITE_DIR=site
 VENDOR_DIR=$SITE_DIR/vendor
 COMPOSER_LOCK=$SITE_DIR/composer.lock
 COMPOSER_JSON=$SITE_DIR/composer.json
+INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
 CACHE_DIR=$SITE_DIR/temp/cache
 
@@ -61,11 +62,11 @@ if [ -d "$CACHE_DIR" ]; then
 fi
 
 if [ -f "$COMPOSER_JSON" ]; then
-	DEV_DEPS=$(jq --raw-output '."require-dev" | keys[]' $COMPOSER_JSON)
+	DEV_DEPS=$(php -r 'foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps); exit((int)empty($deps));')
 	PHPSTAN="phpstan/phpstan"
 	PHPSTAN_BOOTSTRAP="${VENDOR_DIR}/${PHPSTAN}/bootstrap.php"
 	if [ $? -ne 0 ]; then
-	echo "${GRAY}No dev dependencies found in $COMPOSER_JSON${NORMAL}"
+	echo "${GRAY}No dev dependencies found in $INSTALLED_PHP${NORMAL}"
 	else
 	echo "${BOLD}Removing dev dependencies${NORMAL}"
 	shopt -s dotglob
