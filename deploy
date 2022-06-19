@@ -6,6 +6,7 @@ VENDOR_DIR=$SITE_DIR/vendor
 COMPOSER_LOCK=$SITE_DIR/composer.lock
 COMPOSER_JSON=$SITE_DIR/composer.json
 INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
+AUTOLOAD_FILES=$VENDOR_DIR/composer/autoload_files.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
 CACHE_DIR=$SITE_DIR/temp/cache
 
@@ -64,8 +65,6 @@ fi
 
 if [ -f "$COMPOSER_JSON" ]; then
 	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);')
-	PHPSTAN="phpstan/phpstan"
-	PHPSTAN_BOOTSTRAP="${VENDOR_DIR}/${PHPSTAN}/bootstrap.php"
 	if [ -z "$DEV_DEPS" ]; then
 		echo "${GRAY}No dev dependencies found in $INSTALLED_PHP${NORMAL}"
 	else
@@ -75,19 +74,26 @@ if [ -f "$COMPOSER_JSON" ]; then
 			if [ ! -d "./$VENDOR_DIR/$DEP" ]; then
 				continue
 			fi
-			RECREATE_PHPSTAN_BOOTSTRAP=0
-			if [ "$DEP" = "$PHPSTAN" ] && [ -f "$PHPSTAN_BOOTSTRAP" ]; then
-				RECREATE_PHPSTAN_BOOTSTRAP=1
-			fi
 			rm -rf "./$VENDOR_DIR/$DEP"/*
 			echo "Removed by $0" > "./$VENDOR_DIR/$DEP/REMOVED-BY-DEPLOY"
 			echo "├ $DEP removed"
-			if [ $RECREATE_PHPSTAN_BOOTSTRAP -eq 1 ]; then
-				echo "<?php // $PHPSTAN_BOOTSTRAP re-created empty by $0, required by composer/autoload_files.php" > $PHPSTAN_BOOTSTRAP
-				echo "│ └ ${GRAY}$PHPSTAN_BOOTSTRAP re-created, required by composer/autoload_files.php${NORMAL}"
-			fi
 		done
 		echo "└ ${BOLD}Done${NORMAL}"
+		if [ -f "$AUTOLOAD_FILES" ]; then
+			echo "${BOLD}Re-creating files required by $AUTOLOAD_FILES${NORMAL}"
+			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo $file . PHP_EOL; }')
+			for REQUIRED_FILE in $REQUIRED_FILES; do
+				if [ -f "$REQUIRED_FILE" ]; then
+					echo "├ ${GRAY}$REQUIRED_FILE exists${NORMAL}"
+				else
+					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_FILE"
+					echo "├ $REQUIRED_FILE re-created"
+				fi
+			done
+			echo "└ ${BOLD}Done${NORMAL}"
+		else
+			echo "${GRAY}$AUTOLOAD_FILES not found, won't re-create any files${NORMAL}"
+		fi
 		shopt -u dotglob
 	fi
 else
