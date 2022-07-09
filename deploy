@@ -3,6 +3,7 @@
 ROOT=/srv/www
 SITE_DIR=site
 VENDOR_DIR=$SITE_DIR/vendor
+VENDOR_PATHDIR=$ROOT/$1/$VENDOR_DIR
 COMPOSER_LOCK=$SITE_DIR/composer.lock
 COMPOSER_JSON=$SITE_DIR/composer.json
 INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
@@ -81,12 +82,13 @@ if [ -f "$COMPOSER_JSON" ]; then
 		echo "└ ${BOLD}Done${NORMAL}"
 		if [ -f "$AUTOLOAD_FILES" ]; then
 			echo "${BOLD}Re-creating files required by $AUTOLOAD_FILES${NORMAL}"
-			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo $file . PHP_EOL; }')
+			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }')
 			for REQUIRED_FILE in $REQUIRED_FILES; do
-				if [ -f "$REQUIRED_FILE" ]; then
+				REQUIRED_PATHFILE=$VENDOR_PATHDIR/$REQUIRED_FILE
+				if [ -f "$REQUIRED_PATHFILE" ]; then
 					echo "├ ${GRAY}$REQUIRED_FILE exists${NORMAL}"
 				else
-					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_FILE"
+					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_PATHFILE"
 					echo "├ $REQUIRED_FILE re-created"
 				fi
 			done
