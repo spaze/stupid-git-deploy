@@ -65,6 +65,7 @@ if [ -d "$CACHE_DIR" ]; then
 fi
 
 if [ -f "$COMPOSER_JSON" ]; then
+	# shellcheck disable=SC2016 # The variables in single quotes are PHP code
 	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);')
 	if [ -z "$DEV_DEPS" ]; then
 		echo "${GRAY}No dev dependencies found in $INSTALLED_PHP${NORMAL}"
@@ -82,6 +83,7 @@ if [ -f "$COMPOSER_JSON" ]; then
 		echo "└ ${BOLD}Done${NORMAL}"
 		if [ -f "$AUTOLOAD_FILES" ]; then
 			echo "${BOLD}Re-creating files required by $AUTOLOAD_FILES${NORMAL}"
+			# shellcheck disable=SC2016 # The variables in single quotes are PHP code
 			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }')
 			for REQUIRED_FILE in $REQUIRED_FILES; do
 				REQUIRED_PATHFILE=$VENDOR_PATHDIR/$REQUIRED_FILE
