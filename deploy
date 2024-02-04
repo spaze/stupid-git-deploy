@@ -53,10 +53,14 @@ echo -n "${BOLD}${MAGENTA}"
 git reset origin --hard
 echo -n "$NORMAL"
 git submodule update --init --recursive
-echo "Removing untracked files in $VENDOR_DIR:"
-echo -n "$GRAY"
-git clean -x --force $VENDOR_DIR
-echo -n "$NORMAL"
+
+if [ -d "$VENDOR_DIR" ]; then
+	echo "Removing untracked files in $VENDOR_DIR:"
+	echo -n "$GRAY"
+	git clean -x --force $VENDOR_DIR
+	echo -n "$NORMAL"
+	echo "Untracked files in $VENDOR_DIR removed"
+fi
 
 if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 	CURRENT_DIR=$(pwd)
