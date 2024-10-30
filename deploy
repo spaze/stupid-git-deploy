@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
 ROOT=/srv/www
-SITE_DIR=site
-VENDOR_DIR=$SITE_DIR/vendor
+APP_DIR=app
+VENDOR_DIR=$APP_DIR/vendor
 VENDOR_PATHDIR=$ROOT/$1/$VENDOR_DIR
-COMPOSER_LOCK=$SITE_DIR/composer.lock
-COMPOSER_JSON=$SITE_DIR/composer.json
+COMPOSER_LOCK=$APP_DIR/composer.lock
+COMPOSER_JSON=$APP_DIR/composer.json
 INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
 AUTOLOAD_FILES=$VENDOR_DIR/composer/autoload_files.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
-CACHE_DIR=$SITE_DIR/temp/cache
+CACHE_DIR=$APP_DIR/temp/cache
 
 if [ $# -eq 0 ]; then
 	echo "$0 <site>, where site is:"
@@ -64,7 +64,7 @@ fi
 
 if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 	CURRENT_DIR=$(pwd)
-	cd $SITE_DIR || { echo "$SITE_DIR doesn't exist, aborting"; exit 1; }
+	cd $APP_DIR || { echo "$APP_DIR doesn't exist, aborting"; exit 1; }
 	composer install --no-dev
 	echo "${BOLD}Composer dependencies installed${NORMAL}"
 	cd "$CURRENT_DIR" || { echo "$CURRENT_DIR doesn't exist anymore?"; exit 1; }
