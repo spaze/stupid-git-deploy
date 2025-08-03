@@ -46,8 +46,9 @@ for I in docs conf; do
 	fi
 done
 
-export GIT_SSH_KEY=$HOME/.ssh/web-$1.key
-export GIT_SSH=$HOME/bin/git_ssh_wrapper
+GIT_SSH_KEY=$HOME/.ssh/web-$1.key
+GIT_SSH=$(which git_ssh_wrapper)
+export GIT_SSH_KEY GIT_SSH
 git fetch
 echo -n "${BOLD}${MAGENTA}"
 git reset origin --hard
