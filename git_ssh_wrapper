@@ -1,0 +1,2 @@
+#!/bin/sh
+$(which ssh) -i "$GIT_SSH_KEY" "$@"

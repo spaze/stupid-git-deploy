@@ -10,6 +10,7 @@ INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
 AUTOLOAD_FILES=$VENDOR_DIR/composer/autoload_files.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
 CACHE_DIR=$APP_DIR/temp/cache
+GIT_SSH_WRAPPER=git_ssh_wrapper
 
 if [ $# -eq 0 ]; then
 	echo "$0 <site>, where site is:"
@@ -46,8 +47,13 @@ for I in docs conf; do
 	fi
 done
 
-export GIT_SSH_KEY=$HOME/.ssh/web-$1.key
-export GIT_SSH=$HOME/bin/git_ssh_wrapper
+GIT_SSH_KEY=$HOME/.ssh/web-$1.key
+GIT_SSH=$(which $GIT_SSH_WRAPPER)
+if [ "$GIT_SSH" -eq "" ]; then
+	echo "$GIT_SSH_WRAPPER not found in path, exiting"
+	exit
+fi
+export GIT_SSH_KEY GIT_SSH
 git fetch
 echo -n "${BOLD}${MAGENTA}"
 git reset origin --hard
