@@ -1,5 +1,4 @@
 #!/bin/bash
-# symlink this file to /etc/bash_completion.d
 DEPLOY=$(which deploy)
 SITES=$("$DEPLOY" | tail --lines=+2)
 complete -W "$SITES" deploy
