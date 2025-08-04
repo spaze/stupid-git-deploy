@@ -1,0 +1,4 @@
+#!/bin/bash
+DEPLOY=$(which deploy)
+SITES=$("$DEPLOY" | tail --lines=+2)
+complete -W "$SITES" deploy
