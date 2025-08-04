@@ -49,7 +49,7 @@ done
 
 GIT_SSH_KEY=$HOME/.ssh/web-$1.key
 GIT_SSH=$(which $GIT_SSH_WRAPPER)
-if [ "$GIT_SSH" -eq "" ]; then
+if [ "$GIT_SSH" == "" ]; then
 	echo "$GIT_SSH_WRAPPER not found in path, exiting"
 	exit
 fi
