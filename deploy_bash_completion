@@ -1,4 +1,12 @@
 #!/bin/bash
-DEPLOY=$(which deploy)
-SITES=$("$DEPLOY" | tail --lines=+2)
-complete -W "$SITES" deploy
+DEPLOY=""
+if [ -x "$HOME/bin/deploy" ]; then
+	DEPLOY=$HOME/bin/deploy
+fi
+if [ -x "$HOME/.local/bin/deploy" ]; then
+	DEPLOY=$HOME/.local/bin/deploy
+fi
+if [ "$DEPLOY" != "" ]; then
+	SITES=$($DEPLOY | tail --lines=+2)
+	complete -W "$SITES" deploy
+fi
