@@ -62,8 +62,7 @@ if ! [[ $STUPID_GIT_DEPLOY_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
 fi
 
 if [ ! -d "$STUPID_GIT_DEPLOY_ROOT/$1" ]; then
-	echo "Site $1 doesn't exist"
-	exit 2
+	fail 2 "site $1 doesn't exist"
 fi
 
 # Don't let two deploys of the same site run at the same time.
@@ -74,15 +73,14 @@ flock -n 9 || fail "could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1
 
 echo "${BOLD}Deploying ${GREEN}$1${NORMAL}"
 
-cd "$STUPID_GIT_DEPLOY_ROOT/$1" || { echo "$STUPID_GIT_DEPLOY_ROOT/$1 doesn't exist, aborting"; exit 1; }
+cd "$STUPID_GIT_DEPLOY_ROOT/$1" || fail "$STUPID_GIT_DEPLOY_ROOT/$1 doesn't exist"
 
 for I in docs conf; do
 	if [ -x "./$I/deploy/init" ]; then
 		./$I/deploy/init
 		RET_VAL=$?
 		if [ ! $RET_VAL -eq 0 ]; then
-			echo "$I/deploy/init returned error $RET_VAL, exiting"
-			exit
+			fail "$RET_VAL" "$I/deploy/init returned error $RET_VAL"
 		fi
 	elif [ -f "./$I/deploy/init" ]; then
 		echo "$I/deploy/init exists but it's not executable, skipping"
@@ -92,8 +90,7 @@ done
 GIT_SSH_KEY=$HOME/.ssh/web-$1.key
 GIT_SSH=$(command -v "$GIT_SSH_WRAPPER")
 if [ "$GIT_SSH" == "" ]; then
-	echo "$GIT_SSH_WRAPPER not found in path, exiting"
-	exit
+	fail "$GIT_SSH_WRAPPER not found in path"
 fi
 export GIT_SSH_KEY GIT_SSH
 
@@ -150,10 +147,10 @@ fi
 
 if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 	CURRENT_DIR=$(pwd)
-	cd $APP_DIR || { echo "$APP_DIR doesn't exist, aborting"; exit 1; }
+	cd $APP_DIR || fail "$APP_DIR doesn't exist"
 	composer install --no-dev || fail "composer install failed"
 	echo "${BOLD}Composer dependencies installed${NORMAL}"
-	cd "$CURRENT_DIR" || { echo "$CURRENT_DIR doesn't exist anymore?"; exit 1; }
+	cd "$CURRENT_DIR" || fail "$CURRENT_DIR doesn't exist anymore?"
 fi
 
 if [ -d "$CACHE_DIR" ]; then
