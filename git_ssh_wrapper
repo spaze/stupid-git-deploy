@@ -1,2 +1,5 @@
 #!/bin/sh
-$(which ssh) -i "$GIT_SSH_KEY" "$@"
+
+[ -r "$GIT_SSH_KEY" ] || { echo "git_ssh_wrapper: deploy key not readable: $GIT_SSH_KEY" >&2; exit 1; }
+ssh_bin=$(command -v ssh) || { echo "git_ssh_wrapper: ssh not found in PATH" >&2; exit 2; }
+exec "$ssh_bin" -i "$GIT_SSH_KEY" "$@"

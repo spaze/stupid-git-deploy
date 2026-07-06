@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
-ROOT=/srv/www
 APP_DIR=app
 VENDOR_DIR=$APP_DIR/vendor
-VENDOR_PATHDIR=$ROOT/$1/$VENDOR_DIR
 COMPOSER_LOCK=$APP_DIR/composer.lock
 COMPOSER_JSON=$APP_DIR/composer.json
 INSTALLED_PHP=$VENDOR_DIR/composer/installed.php
@@ -11,17 +9,12 @@ AUTOLOAD_FILES=$VENDOR_DIR/composer/autoload_files.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
 CACHE_DIR=$APP_DIR/temp/cache
 GIT_SSH_WRAPPER=git_ssh_wrapper
-
-if [ $# -eq 0 ]; then
-	echo "$0 <site>, where site is:"
-	ls -1 $ROOT
-	exit 1
-fi
-
-if [ ! -d "$ROOT/$1" ]; then
-	echo "Site $1 doesn't exist"
-	exit 2
-fi
+STUPID_GIT_DEPLOY_ROOT=${STUPID_GIT_DEPLOY_ROOT:-/srv/www}
+STUPID_GIT_DEPLOY_TAG=${STUPID_GIT_DEPLOY_TAG:-deploy}
+STUPID_GIT_DEPLOY_ALLOWED_SIGNERS=${STUPID_GIT_DEPLOY_ALLOWED_SIGNERS:-$HOME/.config/deploy/allowed_signers}
+STUPID_GIT_DEPLOY_LOG=${STUPID_GIT_DEPLOY_LOG:-$HOME/.local/state/deploy/deploy.log}
+STUPID_GIT_DEPLOY_LOCK=${STUPID_GIT_DEPLOY_LOCK:-$HOME/.local/state/deploy/locks/$1.lock}
+VENDOR_PATHDIR=$STUPID_GIT_DEPLOY_ROOT/$1/$VENDOR_DIR
 
 BOLD=$(tput bold)
 RED=$(tput setaf 1)
@@ -30,9 +23,58 @@ MAGENTA=$(tput setaf 5)
 GRAY=$(tput setaf 243)  # will only work with TERM=xterm-256color
 NORMAL=$(tput sgr0)
 
+# No `set -e` here, so failures must be handled explicitly (`|| fail`, or `exit`).
+# fail [exit-code] message (exit-code defaults to 1)
+fail() {
+	local code=1
+	[[ ${1:-} =~ ^[0-9]+$ ]] && [ $# -ge 2 ] && { code=$1; shift; }
+	echo "${BOLD}${RED}DEPLOY ABORTED: $*${NORMAL}" >&2
+	exit "$code"
+}
+
+# Log only SHAs/fixed words, never author/subject, so a crafted commit can't
+# forge log lines.  Args: site result tagobj commit prev
+deploy_log() {
+	mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOG")" 2>/dev/null
+	printf 'ts=%s site=%s result=%s tag=%s commit=%s prev=%s\n' \
+		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" >> "$STUPID_GIT_DEPLOY_LOG" 2>/dev/null \
+		|| echo "WARNING: could not write audit log $STUPID_GIT_DEPLOY_LOG" >&2
+}
+
+if [ $# -eq 0 ]; then
+	echo "$0 <site> [<commit>]"
+	echo "  <commit>: optional, passed by sign-deploy; deploy only if the signed tag still points at it"
+	echo "site is one of:"
+	ls -1 -- "$STUPID_GIT_DEPLOY_ROOT"
+	exit 1
+fi
+
+if ! [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+	fail 2 "invalid site name '$1' (letters, digits, dot, dash, underscore only)"
+fi
+
+if ! [[ $STUPID_GIT_DEPLOY_ROOT =~ ^[A-Za-z0-9/._][A-Za-z0-9/._-]*$ ]]; then
+	fail 2 "unsafe STUPID_GIT_DEPLOY_ROOT '$STUPID_GIT_DEPLOY_ROOT' (letters, digits, / . _ -; must not start with -)"
+fi
+
+if ! [[ $STUPID_GIT_DEPLOY_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+	fail 2 "unsafe STUPID_GIT_DEPLOY_TAG '$STUPID_GIT_DEPLOY_TAG'"
+fi
+
+if [ ! -d "$STUPID_GIT_DEPLOY_ROOT/$1" ]; then
+	echo "Site $1 doesn't exist"
+	exit 2
+fi
+
+# Don't let two deploys of the same site run at the same time.
+command -v flock >/dev/null 2>&1 || fail "flock not found (install util-linux)"
+mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOCK")" 2>/dev/null
+exec 9>"$STUPID_GIT_DEPLOY_LOCK" || fail "cannot open lock file $STUPID_GIT_DEPLOY_LOCK"
+flock -n 9 || fail "could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1 (another deploy may be running)"
+
 echo "${BOLD}Deploying ${GREEN}$1${NORMAL}"
 
-cd "$ROOT/$1" || { echo "$ROOT/$1 doesn't exist, aborting"; exit 1; }
+cd "$STUPID_GIT_DEPLOY_ROOT/$1" || { echo "$STUPID_GIT_DEPLOY_ROOT/$1 doesn't exist, aborting"; exit 1; }
 
 for I in docs conf; do
 	if [ -x "./$I/deploy/init" ]; then
@@ -48,22 +90,60 @@ for I in docs conf; do
 done
 
 GIT_SSH_KEY=$HOME/.ssh/web-$1.key
-GIT_SSH=$(which $GIT_SSH_WRAPPER)
+GIT_SSH=$(command -v "$GIT_SSH_WRAPPER")
 if [ "$GIT_SSH" == "" ]; then
 	echo "$GIT_SSH_WRAPPER not found in path, exiting"
 	exit
 fi
 export GIT_SSH_KEY GIT_SSH
-git fetch
+
+# Refuse to deploy anything the signed "$STUPID_GIT_DEPLOY_TAG" tag doesn't authorize.
+
+command -v git >/dev/null 2>&1 || fail "Git not found"
+command -v ssh-keygen >/dev/null 2>&1 || fail "ssh-keygen from OpenSSH not found (needed to verify the tag signature)"
+# Git >= 2.34 verifies SSH signatures
+GITVER=$(git --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+printf '2.34\n%s\n' "$GITVER" | sort -V -C || fail "Git >= 2.34 required for SSH tag verification (have ${GITVER:-unknown})"
+
+# --force: the deploy tag is re-pointed on every deploy
+git fetch --force origin tag "$STUPID_GIT_DEPLOY_TAG" || fail "could not fetch tag '$STUPID_GIT_DEPLOY_TAG' from origin"
+
+# Pin the tag object once so verify and checkout use the same object.
+TAGOBJ=$(git rev-parse --verify "refs/tags/$STUPID_GIT_DEPLOY_TAG" 2>/dev/null) || fail "tag '$STUPID_GIT_DEPLOY_TAG' missing after fetch"
+
+[ -r "$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" ] || fail "allowed_signers not found or unreadable: $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS"
+# Empty GNUPGHOME: only $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS decides trust, not any ambient GPG key.
+EMPTY_GNUPGHOME=$(mktemp -d) || fail "could not create a temporary GNUPGHOME"
+trap 'rm -rf "$EMPTY_GNUPGHOME"' EXIT
+if ! GNUPGHOME="$EMPTY_GNUPGHOME" git -c gpg.ssh.allowedSignersFile="$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" verify-tag "$TAGOBJ"; then
+	deploy_log "$1" badsig "$TAGOBJ" - "$(git rev-parse HEAD 2>/dev/null)"
+	fail "tag '$STUPID_GIT_DEPLOY_TAG' ($TAGOBJ) is NOT signed by an authorized key; refusing to deploy"
+fi
+
+candidate=$(git rev-parse --verify "$TAGOBJ^{commit}" 2>/dev/null) || fail "tag '$STUPID_GIT_DEPLOY_TAG' does not point at a commit"
+
+if [ -n "${2:-}" ] && [ "$candidate" != "$2" ]; then
+	fail "deploy tag points at $candidate, not the commit you signed (raced?); re-run"
+fi
+
+anchor=$(git rev-parse --verify HEAD 2>/dev/null) || fail "cannot resolve current HEAD"
+
+# Fast-forward only: refuse rollback / replay / diverged history.
+if ! git merge-base --is-ancestor "$anchor" "$candidate"; then
+	deploy_log "$1" nonff "$TAGOBJ" "$candidate" "$anchor"
+	fail "verified commit $candidate is not a fast-forward from live $anchor (rollback/replay/diverged); refusing"
+fi
+
 echo -n "${BOLD}${MAGENTA}"
-git reset origin --hard
+git reset --hard "$candidate" || { echo -n "$NORMAL"; fail "git reset --hard $candidate failed"; }
 echo -n "$NORMAL"
-git submodule update --init --recursive
+
+git submodule update --init --recursive || fail "submodule update failed"
 
 if [ -d "$VENDOR_DIR" ]; then
 	echo "Removing untracked files in $VENDOR_DIR:"
 	echo -n "$GRAY"
-	git clean -x --force $VENDOR_DIR
+	git clean -x --force $VENDOR_DIR || { echo -n "$NORMAL"; fail "git clean of $VENDOR_DIR failed"; }
 	echo -n "$NORMAL"
 	echo "Untracked files in $VENDOR_DIR removed"
 fi
@@ -71,19 +151,19 @@ fi
 if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 	CURRENT_DIR=$(pwd)
 	cd $APP_DIR || { echo "$APP_DIR doesn't exist, aborting"; exit 1; }
-	composer install --no-dev
+	composer install --no-dev || fail "composer install failed"
 	echo "${BOLD}Composer dependencies installed${NORMAL}"
 	cd "$CURRENT_DIR" || { echo "$CURRENT_DIR doesn't exist anymore?"; exit 1; }
 fi
 
 if [ -d "$CACHE_DIR" ]; then
-	sudo rm -r $CACHE_DIR
+	sudo rm -r $CACHE_DIR || fail "could not purge cache $CACHE_DIR"
 	echo "${BOLD}Cache purged${NORMAL}"
 fi
 
 if [ -f "$COMPOSER_JSON" ]; then
 	# shellcheck disable=SC2016 # The variables in single quotes are PHP code
-	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);')
+	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);') || fail "could not read dev dependencies from $INSTALLED_PHP"
 	if [ -z "$DEV_DEPS" ]; then
 		echo "${GRAY}No dev dependencies found in $INSTALLED_PHP${NORMAL}"
 	else
@@ -93,7 +173,7 @@ if [ -f "$COMPOSER_JSON" ]; then
 			if [ ! -d "./$VENDOR_DIR/$DEP" ]; then
 				continue
 			fi
-			rm -rf "./$VENDOR_DIR/$DEP"/*
+			rm -rf "./$VENDOR_DIR/$DEP"/* || fail "could not remove dev dependency $DEP"
 			echo "Removed by $0" > "./$VENDOR_DIR/$DEP/REMOVED-BY-DEPLOY"
 			echo "├ $DEP removed"
 		done
@@ -101,16 +181,17 @@ if [ -f "$COMPOSER_JSON" ]; then
 		if [ -f "$AUTOLOAD_FILES" ]; then
 			echo "${BOLD}Re-creating files required by $AUTOLOAD_FILES${NORMAL}"
 			# shellcheck disable=SC2016 # The variables in single quotes are PHP code
-			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }')
-			for REQUIRED_FILE in $REQUIRED_FILES; do
+			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }') || fail "could not read required files from $AUTOLOAD_FILES"
+			while IFS= read -r REQUIRED_FILE; do
+				[ -n "$REQUIRED_FILE" ] || continue
 				REQUIRED_PATHFILE=$VENDOR_PATHDIR/$REQUIRED_FILE
 				if [ -f "$REQUIRED_PATHFILE" ]; then
 					echo "├ ${GRAY}$REQUIRED_FILE exists${NORMAL}"
 				else
-					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_PATHFILE"
+					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_PATHFILE" || fail "could not re-create $REQUIRED_PATHFILE"
 					echo "├ $REQUIRED_FILE re-created"
 				fi
-			done
+			done <<< "$REQUIRED_FILES"
 			echo "└ ${BOLD}Done${NORMAL}"
 		else
 			echo "${GRAY}$AUTOLOAD_FILES not found, won't re-create any files${NORMAL}"
@@ -130,4 +211,5 @@ curl \
 --write-out "%{url_effective} -> HTTP %{http_code} (in %{time_total}s)\n" \
 "$1" | sed "s/\(HTTP 2[0-9]\+\)/${BOLD}${GREEN}\\1${NORMAL}/" | sed "s/\(HTTP 5[0-9]\+\)/${BOLD}${RED}\\1 FAILURE${NORMAL}/"
 
+deploy_log "$1" ok "$TAGOBJ" "$candidate" "$anchor"
 echo "${BOLD}${GREEN}$1 successfully deployed${NORMAL}"
