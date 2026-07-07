@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# sign-deploy <site>: sign a "deploy" tag over local HEAD and trigger the
+# server, which verifies the signature before deploying. Pull and review your
+# changes first: your signature IS the authorization. Warns, never blocks, on a
+# dirty or off-branch HEAD.
+set -euo pipefail
+
+SITE=${1:?usage: sign-deploy <site>}
+if ! [[ $SITE =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+	echo "Invalid site name '$SITE' (letters, digits, dot, dash, underscore only)" >&2
+	exit 2
+fi
+STUPID_GIT_DEPLOY_HOST=${STUPID_GIT_DEPLOY_HOST:?set STUPID_GIT_DEPLOY_HOST (e.g. export STUPID_GIT_DEPLOY_HOST=deploy.example.com)}
+# a leading dash would be read by ssh as an option, not a host
+if [[ $STUPID_GIT_DEPLOY_HOST == -* ]]; then
+	echo "Invalid STUPID_GIT_DEPLOY_HOST '$STUPID_GIT_DEPLOY_HOST' (must not start with '-')" >&2
+	exit 2
+fi
+STUPID_GIT_DEPLOY_TAG=${STUPID_GIT_DEPLOY_TAG:-deploy}
+if ! [[ $STUPID_GIT_DEPLOY_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+	echo "Invalid STUPID_GIT_DEPLOY_TAG '$STUPID_GIT_DEPLOY_TAG'" >&2
+	exit 2
+fi
+# ~ is expanded on the SERVER (ssh's PATH is minimal, so we give a full path);
+# matches the documented install. Override if `deploy` lives elsewhere.
+STUPID_GIT_DEPLOY_REMOTE=${STUPID_GIT_DEPLOY_REMOTE:-'~/.local/bin/deploy'}
+if ! [[ $STUPID_GIT_DEPLOY_REMOTE =~ ^[A-Za-z0-9~/._][A-Za-z0-9~/._-]*$ ]]; then
+	echo "Invalid STUPID_GIT_DEPLOY_REMOTE '$STUPID_GIT_DEPLOY_REMOTE' (must be a plain path: letters, digits, ~ / . _ -; no leading dash)" >&2
+	exit 2
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+	echo "WARNING: working tree is dirty; the tag will point at committed HEAD, not your uncommitted changes" >&2
+fi
+
+default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)
+default_branch=${default_branch:-main}
+remote_tip=$(git rev-parse --verify --quiet "origin/$default_branch" || true)
+if [ -n "$remote_tip" ] && [ "$(git rev-parse HEAD)" != "$remote_tip" ]; then
+	echo "WARNING: HEAD is not at origin/$default_branch (behind, ahead/unpushed, or diverged); deploying $(git rev-parse --short HEAD) anyway" >&2
+fi
+
+# chained so a failed sign/push never triggers the server. The remote path, site,
+# and SHA expand client-side (intended; the ~ is expanded on the server). The
+# trailing SHA pins the commit we signed so a racing tag update can't swap it.
+# shellcheck disable=SC2029
+git tag -sf "$STUPID_GIT_DEPLOY_TAG" -m "deploy $(git rev-parse --short HEAD)" HEAD \
+	&& git push --force origin "refs/tags/$STUPID_GIT_DEPLOY_TAG" \
+	&& ssh "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"
