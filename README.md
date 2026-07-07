@@ -1,7 +1,7 @@
 # stupid-git-deploy
 
 A stupidly simple bash script to deploy a site from Git(Hub): fetch, check out the
-new code, run `composer install`, purge the cache, strip dev dependencies, and
+new code, run `composer install --no-dev`, purge the cache, strip dev dependencies, and
 hit the site as a healthcheck.
 
 Before deploying anything, it verifies that the code was **authorized by you**:
@@ -17,7 +17,9 @@ below for exactly what that does and does not buy you.
    deploy over ssh.
 2. On the server, `deploy <site>` fetches the tag, checks its signature against a
    local allow-list of your public key(s), and refuses to continue unless it's a
-   valid, fast-forward-only move. Only then does it touch the working tree.
+   valid, fast-forward-only move. Only then does it check out the new code. Any
+   `docs/deploy/init` and `conf/deploy/init` hooks in the current checkout run
+   before that verification.
 
 The tag is *authorization* ("I, holder of the key, approve deploying this"). The
 server never trusts GitHub, a password, a token, or its own push credentials for

@@ -32,8 +32,8 @@ fail() {
 	exit "$code"
 }
 
-# Log only SHAs/fixed words, never author/subject, so a crafted commit can't
-# forge log lines.  Args: site result tagobj commit prev
+# Log only fixed words, SHAs, and the validated site, never author/subject,
+# so a crafted commit can't forge log lines. Args: site result tagobj commit prev
 deploy_log() {
 	mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOG")" 2>/dev/null
 	printf 'ts=%s site=%s result=%s tag=%s commit=%s prev=%s\n' \
