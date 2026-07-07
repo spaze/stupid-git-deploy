@@ -11,10 +11,38 @@ if ! [[ $SITE =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
 	echo "Invalid site name '$SITE' (letters, digits, dot, dash, underscore only)" >&2
 	exit 2
 fi
-STUPID_GIT_DEPLOY_HOST=${STUPID_GIT_DEPLOY_HOST:?set STUPID_GIT_DEPLOY_HOST (e.g. export STUPID_GIT_DEPLOY_HOST=deploy.example.com)}
+STUPID_GIT_DEPLOY_HOST=${STUPID_GIT_DEPLOY_HOST:-}
+if [ -z "$STUPID_GIT_DEPLOY_HOST" ]; then
+	STUPID_GIT_DEPLOY_SERVERS=${STUPID_GIT_DEPLOY_SERVERS:-~/.config/deploy/servers}
+	if [ ! -f "$STUPID_GIT_DEPLOY_SERVERS" ] || [ ! -r "$STUPID_GIT_DEPLOY_SERVERS" ]; then
+		echo "no STUPID_GIT_DEPLOY_HOST set and no readable servers map at $STUPID_GIT_DEPLOY_SERVERS (create it, or set STUPID_GIT_DEPLOY_HOST)" >&2
+		exit 2
+	fi
+	lineno=0
+	while IFS=$' \t\r' read -r pattern host _ || [ -n "${pattern:-}" ]; do
+		lineno=$((lineno + 1))
+		pattern=${pattern#$'\xEF\xBB\xBF'}
+		[ -n "$pattern" ] || continue
+		case "$pattern" in \#*) continue ;; esac
+		# shellcheck disable=SC2254 # pattern is an intentional glob from the trusted servers map
+		case "$SITE" in
+			$pattern)
+				if [ -z "$host" ]; then
+					echo "$STUPID_GIT_DEPLOY_SERVERS line $lineno: pattern '$pattern' matches but has no host" >&2
+					exit 2
+				fi
+				STUPID_GIT_DEPLOY_HOST=$host
+				break ;;
+		esac
+	done < "$STUPID_GIT_DEPLOY_SERVERS"
+	if [ -z "$STUPID_GIT_DEPLOY_HOST" ]; then
+		echo "no matching entry for site '$SITE' in $STUPID_GIT_DEPLOY_SERVERS (add a line for it or a '*' catch-all, or set STUPID_GIT_DEPLOY_HOST)" >&2
+		exit 2
+	fi
+fi
 # a leading dash would be read by ssh as an option, not a host
 if [[ $STUPID_GIT_DEPLOY_HOST == -* ]]; then
-	echo "Invalid STUPID_GIT_DEPLOY_HOST '$STUPID_GIT_DEPLOY_HOST' (must not start with '-')" >&2
+	echo "Invalid host '$STUPID_GIT_DEPLOY_HOST' (must not start with '-')" >&2
 	exit 2
 fi
 STUPID_GIT_DEPLOY_TAG=${STUPID_GIT_DEPLOY_TAG:-deploy}

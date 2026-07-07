@@ -75,14 +75,25 @@ failed, and so on) print a message and exit without a log line.
    `git config --global gpg.format ssh` and
    `git config --global user.signingkey key::ssh-ed25519 AAAA...` (or your 1Password
    config). The *public* key must match a line in the server's `allowed_signers`.
-3. Tell `sign-deploy` where the server is:
-   ```sh
-   export STUPID_GIT_DEPLOY_HOST=your.server.example
+3. Tell `sign-deploy` which server each site deploys to, in
+   `~/.config/deploy/servers` — one `<pattern> <host>` per line, first match wins:
    ```
-   By default it runs `~/.local/bin/deploy` on the server (matching the install
-   above — the `~` is expanded on the server, so it works even if your home
-   directory differs there). Set `STUPID_GIT_DEPLOY_REMOTE` only if you
-   installed `deploy` somewhere else.
+   site-one.example     host1.example.com
+   site-two.example     host1.example.com
+   *.staging.example    host1.example.com
+   *                    host2.example.com
+   ```
+   `<host>` is whatever you'd `ssh` to; mapping many sites onto the same host
+   keeps your `known_hosts` small. The first field is usually a literal site
+   name, but may be a glob — `*.staging.example`, or `*` on the last line as an
+   optional catch-all (keep it last: first match wins). Without a catch-all, an
+   unlisted site is an error. Override the file location with
+   `STUPID_GIT_DEPLOY_SERVERS`, or skip the map for a one-off with
+   `STUPID_GIT_DEPLOY_HOST=your.server.example`.
+
+   By default `sign-deploy` runs `~/.local/bin/deploy` on the server (the `~` is
+   expanded there, so it works even if your home directory differs). Set
+   `STUPID_GIT_DEPLOY_REMOTE` only if you installed `deploy` somewhere else.
 
 ## Deploying
 
