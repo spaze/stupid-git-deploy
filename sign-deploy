@@ -57,6 +57,11 @@ if ! [[ $STUPID_GIT_DEPLOY_REMOTE =~ ^[A-Za-z0-9~/._][A-Za-z0-9~/._-]*$ ]]; then
 	echo "Invalid STUPID_GIT_DEPLOY_REMOTE '$STUPID_GIT_DEPLOY_REMOTE' (must be a plain path: letters, digits, ~ / . _ -; no leading dash)" >&2
 	exit 2
 fi
+STUPID_GIT_DEPLOY_SSH=${STUPID_GIT_DEPLOY_SSH:-ssh}
+if ! [[ $STUPID_GIT_DEPLOY_SSH =~ ^[A-Za-z0-9/._][A-Za-z0-9/._-]*$ ]]; then
+	echo "Invalid STUPID_GIT_DEPLOY_SSH '$STUPID_GIT_DEPLOY_SSH' (must be a plain command or path: letters, digits, / . _ -; no leading dash)" >&2
+	exit 2
+fi
 
 if [ -n "$(git status --porcelain)" ]; then
 	echo "WARNING: working tree is dirty; the tag will point at committed HEAD, not your uncommitted changes" >&2
@@ -75,4 +80,4 @@ fi
 # shellcheck disable=SC2029
 git tag -sf "$STUPID_GIT_DEPLOY_TAG" -m "deploy $(git rev-parse --short HEAD)" HEAD \
 	&& git push --force origin "refs/tags/$STUPID_GIT_DEPLOY_TAG" \
-	&& ssh "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"
+	&& "$STUPID_GIT_DEPLOY_SSH" "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"

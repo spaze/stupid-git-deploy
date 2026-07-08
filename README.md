@@ -95,6 +95,10 @@ failed, and so on) print a message and exit without a log line.
    expanded there, so it works even if your home directory differs). Set
    `STUPID_GIT_DEPLOY_REMOTE` only if you installed `deploy` somewhere else.
 
+   `sign-deploy` connects with `ssh` by default; set `STUPID_GIT_DEPLOY_SSH` to
+   use a different client — e.g. `ssh.exe` on WSL, so authentication uses the
+   Windows-side agent (such as 1Password) instead of WSL's own ssh.
+
 ## Deploying
 
 ```sh
