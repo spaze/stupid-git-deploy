@@ -89,16 +89,24 @@ for I in docs conf; do
 	fi
 done
 
-GIT_SSH_KEY=$HOME/.ssh/web-$1.key
-if [ -n "$SELF_DIR" ] && [ -x "$SELF_DIR/$GIT_SSH_WRAPPER" ]; then
-	GIT_SSH=$SELF_DIR/$GIT_SSH_WRAPPER
-else
-	GIT_SSH=$(type -P "$GIT_SSH_WRAPPER")
+# git_ssh_wrapper and the per-site key are only used for an SSH origin
+ORIGIN_URL=$(git remote get-url origin 2>/dev/null)
+case "$ORIGIN_URL" in
+	ssh://*) origin_ssh=1 ;;
+	*://*)   origin_ssh= ;;
+	*:*)     case "${ORIGIN_URL%%:*}" in */*) origin_ssh= ;; *) origin_ssh=1 ;; esac ;;
+	*)       origin_ssh= ;;
+esac
+if [ -n "$origin_ssh" ]; then
+	GIT_SSH_KEY=$HOME/.ssh/web-$1.key
+	if [ -n "$SELF_DIR" ] && [ -x "$SELF_DIR/$GIT_SSH_WRAPPER" ]; then
+		GIT_SSH=$SELF_DIR/$GIT_SSH_WRAPPER
+	else
+		GIT_SSH=$(type -P "$GIT_SSH_WRAPPER")
+	fi
+	[ -n "$GIT_SSH" ] || fail "$GIT_SSH_WRAPPER not found next to the deploy script ($SELF_DIR) or in PATH"
+	export GIT_SSH_KEY GIT_SSH
 fi
-if [ -z "$GIT_SSH" ]; then
-	fail "$GIT_SSH_WRAPPER not found next to the deploy script ($SELF_DIR) or in PATH"
-fi
-export GIT_SSH_KEY GIT_SSH
 
 # Refuse to deploy anything the signed "$STUPID_GIT_DEPLOY_TAG" tag doesn't authorize.
 
