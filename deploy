@@ -17,6 +17,7 @@ STUPID_GIT_DEPLOY_LOG=${STUPID_GIT_DEPLOY_LOG:-$HOME/.local/state/deploy/deploy.
 STUPID_GIT_DEPLOY_LOCK=${STUPID_GIT_DEPLOY_LOCK:-$HOME/.local/state/deploy/locks/$1.lock}
 VENDOR_PATHDIR=$STUPID_GIT_DEPLOY_ROOT/$1/$VENDOR_DIR
 
+case "${TERM:-}" in ''|dumb) export TERM=xterm-256color ;; esac
 BOLD=$(tput bold)
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
