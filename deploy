@@ -9,6 +9,7 @@ AUTOLOAD_FILES=$VENDOR_DIR/composer/autoload_files.php
 VENDOR_IGNORE=$VENDOR_DIR/.gitignore
 CACHE_DIR=$APP_DIR/temp/cache
 GIT_SSH_WRAPPER=git_ssh_wrapper
+SELF_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
 STUPID_GIT_DEPLOY_ROOT=${STUPID_GIT_DEPLOY_ROOT:-/srv/www}
 STUPID_GIT_DEPLOY_TAG=${STUPID_GIT_DEPLOY_TAG:-deploy}
 STUPID_GIT_DEPLOY_ALLOWED_SIGNERS=${STUPID_GIT_DEPLOY_ALLOWED_SIGNERS:-$HOME/.config/deploy/allowed_signers}
@@ -88,9 +89,13 @@ for I in docs conf; do
 done
 
 GIT_SSH_KEY=$HOME/.ssh/web-$1.key
-GIT_SSH=$(command -v "$GIT_SSH_WRAPPER")
-if [ "$GIT_SSH" == "" ]; then
-	fail "$GIT_SSH_WRAPPER not found in path"
+if [ -n "$SELF_DIR" ] && [ -x "$SELF_DIR/$GIT_SSH_WRAPPER" ]; then
+	GIT_SSH=$SELF_DIR/$GIT_SSH_WRAPPER
+else
+	GIT_SSH=$(type -P "$GIT_SSH_WRAPPER")
+fi
+if [ -z "$GIT_SSH" ]; then
+	fail "$GIT_SSH_WRAPPER not found next to the deploy script ($SELF_DIR) or in PATH"
 fi
 export GIT_SSH_KEY GIT_SSH
 
