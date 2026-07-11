@@ -11,6 +11,10 @@ if ! [[ $SITE =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
 	echo "Invalid site name '$SITE' (letters, digits, dot, dash, underscore only)" >&2
 	exit 2
 fi
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+	echo "not a Git repository: $PWD (run sign-deploy from inside the repository you want to deploy)" >&2
+	exit 2
+fi
 STUPID_GIT_DEPLOY_HOST=${STUPID_GIT_DEPLOY_HOST:-}
 if [ -z "$STUPID_GIT_DEPLOY_HOST" ]; then
 	STUPID_GIT_DEPLOY_SERVERS=${STUPID_GIT_DEPLOY_SERVERS:-~/.config/deploy/servers}
