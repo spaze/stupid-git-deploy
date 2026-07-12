@@ -40,38 +40,38 @@ deploy_log() {
 	mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOG")" 2>/dev/null
 	printf 'ts=%s site=%s result=%s tag=%s commit=%s prev=%s\n' \
 		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" >> "$STUPID_GIT_DEPLOY_LOG" 2>/dev/null \
-		|| echo "WARNING: could not write audit log $STUPID_GIT_DEPLOY_LOG" >&2
+		|| echo "WARNING: Could not write audit log $STUPID_GIT_DEPLOY_LOG" >&2
 }
 
 if [ $# -eq 0 ]; then
 	echo "$0 <site> [<commit>]"
-	echo "  <commit>: optional, passed by sign-deploy; deploy only if the signed tag still points at it"
-	echo "site is one of:"
-	ls -1 -- "$STUPID_GIT_DEPLOY_ROOT"
+	echo "<commit>: optional, passed by sign-deploy; deploy only if the signed tag still points at it"
+	echo "<site> is one of:"
+	find "$STUPID_GIT_DEPLOY_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -printf '  %f\n' | sort
 	exit 1
 fi
 
 if ! [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-	fail 2 "invalid site name '$1' (letters, digits, dot, dash, underscore only)"
+	fail 2 "Invalid site name '$1' (letters, digits, dot, dash, underscore only)"
 fi
 
 if ! [[ $STUPID_GIT_DEPLOY_ROOT =~ ^[A-Za-z0-9/._][A-Za-z0-9/._-]*$ ]]; then
-	fail 2 "unsafe STUPID_GIT_DEPLOY_ROOT '$STUPID_GIT_DEPLOY_ROOT' (letters, digits, / . _ -; must not start with -)"
+	fail 2 "Unsafe STUPID_GIT_DEPLOY_ROOT '$STUPID_GIT_DEPLOY_ROOT' (letters, digits, / . _ -; must not start with -)"
 fi
 
 if ! [[ $STUPID_GIT_DEPLOY_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
-	fail 2 "unsafe STUPID_GIT_DEPLOY_TAG '$STUPID_GIT_DEPLOY_TAG'"
+	fail 2 "Unsafe STUPID_GIT_DEPLOY_TAG '$STUPID_GIT_DEPLOY_TAG'"
 fi
 
 if [ ! -d "$STUPID_GIT_DEPLOY_ROOT/$1" ]; then
-	fail 2 "site $1 doesn't exist"
+	fail 2 "Site $1 doesn't exist"
 fi
 
 # Don't let two deploys of the same site run at the same time.
 command -v flock >/dev/null 2>&1 || fail "flock not found (install util-linux)"
 mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOCK")" 2>/dev/null
-exec 9>"$STUPID_GIT_DEPLOY_LOCK" || fail "cannot open lock file $STUPID_GIT_DEPLOY_LOCK"
-flock -n 9 || fail "could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1 (another deploy may be running)"
+exec 9>"$STUPID_GIT_DEPLOY_LOCK" || fail "Cannot open lock file $STUPID_GIT_DEPLOY_LOCK"
+flock -n 9 || fail "Could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1 (another deploy may be running)"
 
 echo "${BOLD}Deploying ${GREEN}$1${NORMAL}"
 
@@ -117,39 +117,39 @@ GITVER=$(git --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
 printf '2.34\n%s\n' "$GITVER" | sort -V -C || fail "Git >= 2.34 required for SSH tag verification (have ${GITVER:-unknown})"
 
 # --force: the deploy tag is re-pointed on every deploy
-git fetch --force origin tag "$STUPID_GIT_DEPLOY_TAG" || fail "could not fetch tag '$STUPID_GIT_DEPLOY_TAG' from origin"
+git fetch --force origin tag "$STUPID_GIT_DEPLOY_TAG" || fail "Could not fetch tag '$STUPID_GIT_DEPLOY_TAG' from origin"
 
 # Pin the tag object once so verify and checkout use the same object.
-TAGOBJ=$(git rev-parse --verify "refs/tags/$STUPID_GIT_DEPLOY_TAG" 2>/dev/null) || fail "tag '$STUPID_GIT_DEPLOY_TAG' missing after fetch"
+TAGOBJ=$(git rev-parse --verify "refs/tags/$STUPID_GIT_DEPLOY_TAG" 2>/dev/null) || fail "Tag '$STUPID_GIT_DEPLOY_TAG' missing after fetch"
 
 [ -r "$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" ] || fail "allowed_signers not found or unreadable: $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS"
 # Empty GNUPGHOME: only $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS decides trust, not any ambient GPG key.
-EMPTY_GNUPGHOME=$(mktemp -d) || fail "could not create a temporary GNUPGHOME"
+EMPTY_GNUPGHOME=$(mktemp -d) || fail "Could not create a temporary GNUPGHOME"
 trap 'rm -rf "$EMPTY_GNUPGHOME"' EXIT
 if ! GNUPGHOME="$EMPTY_GNUPGHOME" git -c gpg.ssh.allowedSignersFile="$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" verify-tag "$TAGOBJ"; then
 	deploy_log "$1" badsig "$TAGOBJ" - "$(git rev-parse HEAD 2>/dev/null)"
-	fail "tag '$STUPID_GIT_DEPLOY_TAG' ($TAGOBJ) is NOT signed by an authorized key; refusing to deploy"
+	fail "Tag '$STUPID_GIT_DEPLOY_TAG' ($TAGOBJ) is NOT signed by an authorized key; refusing to deploy"
 fi
 
-candidate=$(git rev-parse --verify "$TAGOBJ^{commit}" 2>/dev/null) || fail "tag '$STUPID_GIT_DEPLOY_TAG' does not point at a commit"
+candidate=$(git rev-parse --verify "$TAGOBJ^{commit}" 2>/dev/null) || fail "Tag '$STUPID_GIT_DEPLOY_TAG' does not point at a commit"
 
 if [ -n "${2:-}" ] && [ "$candidate" != "$2" ]; then
-	fail "deploy tag points at $candidate, not the commit you signed (raced?); re-run"
+	fail "Deploy tag points at $candidate, not the commit you signed (raced?); re-run"
 fi
 
-anchor=$(git rev-parse --verify HEAD 2>/dev/null) || fail "cannot resolve current HEAD"
+anchor=$(git rev-parse --verify HEAD 2>/dev/null) || fail "Cannot resolve current HEAD"
 
 # Fast-forward only: refuse rollback / replay / diverged history.
 if ! git merge-base --is-ancestor "$anchor" "$candidate"; then
 	deploy_log "$1" nonff "$TAGOBJ" "$candidate" "$anchor"
-	fail "verified commit $candidate is not a fast-forward from live $anchor (rollback/replay/diverged); refusing"
+	fail "Verified commit $candidate is not a fast-forward from live $anchor (rollback/replay/diverged); refusing"
 fi
 
 echo -n "${BOLD}${MAGENTA}"
 git reset --hard "$candidate" || { echo -n "$NORMAL"; fail "git reset --hard $candidate failed"; }
 echo -n "$NORMAL"
 
-git submodule update --init --recursive || fail "submodule update failed"
+git submodule update --init --recursive || fail "Submodule update failed"
 
 if [ -d "$VENDOR_DIR" ]; then
 	echo "Removing untracked files in $VENDOR_DIR:"
@@ -168,13 +168,13 @@ if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 fi
 
 if [ -d "$CACHE_DIR" ]; then
-	sudo rm -r $CACHE_DIR || fail "could not purge cache $CACHE_DIR"
+	sudo rm -r $CACHE_DIR || fail "Could not purge cache $CACHE_DIR"
 	echo "${BOLD}Cache purged${NORMAL}"
 fi
 
 if [ -f "$COMPOSER_JSON" ]; then
 	# shellcheck disable=SC2016 # The variables in single quotes are PHP code
-	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);') || fail "could not read dev dependencies from $INSTALLED_PHP"
+	DEV_DEPS=$(php -r '$deps = []; foreach ((require "'$INSTALLED_PHP'")["versions"] as $k => $v) if ($v["dev_requirement"]) $deps[] = $k; echo implode(PHP_EOL, $deps);') || fail "Could not read dev dependencies from $INSTALLED_PHP"
 	if [ -z "$DEV_DEPS" ]; then
 		echo "${GRAY}No dev dependencies found in $INSTALLED_PHP${NORMAL}"
 	else
@@ -184,7 +184,7 @@ if [ -f "$COMPOSER_JSON" ]; then
 			if [ ! -d "./$VENDOR_DIR/$DEP" ]; then
 				continue
 			fi
-			rm -rf "./$VENDOR_DIR/$DEP"/* || fail "could not remove dev dependency $DEP"
+			rm -rf "./$VENDOR_DIR/$DEP"/* || fail "Could not remove dev dependency $DEP"
 			echo "Removed by $0" > "./$VENDOR_DIR/$DEP/REMOVED-BY-DEPLOY"
 			echo "├ $DEP removed"
 		done
@@ -192,14 +192,14 @@ if [ -f "$COMPOSER_JSON" ]; then
 		if [ -f "$AUTOLOAD_FILES" ]; then
 			echo "${BOLD}Re-creating files required by $AUTOLOAD_FILES${NORMAL}"
 			# shellcheck disable=SC2016 # The variables in single quotes are PHP code
-			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }') || fail "could not read required files from $AUTOLOAD_FILES"
+			REQUIRED_FILES=$(php -r 'foreach (require "'$AUTOLOAD_FILES'" as $file) { echo preg_replace("~^" . preg_quote("'"$VENDOR_PATHDIR"'", "~") . "/~", "", $file) . PHP_EOL; }') || fail "Could not read required files from $AUTOLOAD_FILES"
 			while IFS= read -r REQUIRED_FILE; do
 				[ -n "$REQUIRED_FILE" ] || continue
 				REQUIRED_PATHFILE=$VENDOR_PATHDIR/$REQUIRED_FILE
 				if [ -f "$REQUIRED_PATHFILE" ]; then
 					echo "├ ${GRAY}$REQUIRED_FILE exists${NORMAL}"
 				else
-					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_PATHFILE" || fail "could not re-create $REQUIRED_PATHFILE"
+					echo "<?php // $REQUIRED_FILE re-created empty by $0, required by $AUTOLOAD_FILES" > "$REQUIRED_PATHFILE" || fail "Could not re-create $REQUIRED_PATHFILE"
 					echo "├ $REQUIRED_FILE re-created"
 				fi
 			done <<< "$REQUIRED_FILES"
