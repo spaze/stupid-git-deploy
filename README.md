@@ -80,12 +80,15 @@ failed, and so on) print a message and exit without a log line.
    ```sh
    git config --local stupid-git-deploy.site michalspacek.cz # what to deploy (the site name)
    git config --local stupid-git-deploy.host web.example.com # the server to deploy it on
+   git config --local stupid-git-deploy.host ubuntu@web.example.com # ...or [user@]host if the remote login differs
    ```
-   Then `sign-deploy` — with no argument — deploys that site. `<host>` is
-   whatever you'd `ssh` to. Pass a site explicitly to override the config
-   (`sign-deploy other.example`), or set
-   `STUPID_GIT_DEPLOY_HOST=your.server.example` for a one-off host. A repository
-   with neither `stupid-git-deploy.site` nor an argument (or with no
+   Then `sign-deploy` — with no argument — deploys that site. `<[user@]host>` is
+   the ssh *destination* to connect to; include the `user@` when the remote
+   login isn't your local username (without it ssh falls back to your username
+   or `~/.ssh/config`, easy to get wrong). Pass a site explicitly to override
+   the config (`sign-deploy other.example`), or set
+   `STUPID_GIT_DEPLOY_HOST=<[user@]host>` for a one-off. A repository with
+   neither `stupid-git-deploy.site` nor an argument (or with no
    `stupid-git-deploy.host`) prints how to set them.
 
    By default `sign-deploy` runs `~/.local/bin/deploy` on the server (the `~` is
