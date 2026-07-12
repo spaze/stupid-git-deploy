@@ -7,7 +7,7 @@
 set -euo pipefail
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-	echo "not a Git repository: $PWD (run sign-deploy from inside the repository you want to deploy)" >&2
+	echo "Not a Git repository: $PWD (run sign-deploy from inside the repository you want to deploy)" >&2
 	exit 2
 fi
 
@@ -16,7 +16,7 @@ if [ -z "$SITE" ]; then
 	SITE=$(git config --local --get stupid-git-deploy.site 2>/dev/null) || true
 fi
 if [ -z "$SITE" ]; then
-	echo "no site configured for this repository; set it once with" >&2
+	echo "No site configured for this repository; set it once with" >&2
 	echo "    git config --local stupid-git-deploy.site <site> # what to deploy, e.g. example.com" >&2
 	echo "    git config --local stupid-git-deploy.host <host> # the server to deploy it on" >&2
 	echo "then run sign-deploy again (or pass the site as an argument)" >&2
@@ -32,7 +32,7 @@ if [ -z "$STUPID_GIT_DEPLOY_HOST" ]; then
 	STUPID_GIT_DEPLOY_HOST=$(git config --local --get stupid-git-deploy.host 2>/dev/null) || true
 fi
 if [ -z "$STUPID_GIT_DEPLOY_HOST" ]; then
-	echo "no deploy host configured for '$SITE'; set it once with" >&2
+	echo "No deploy host configured for '$SITE'; set it once with" >&2
 	echo "    git config --local stupid-git-deploy.host <host>" >&2
 	echo "(or set STUPID_GIT_DEPLOY_HOST=<host> for a one-off)" >&2
 	exit 2
@@ -65,7 +65,7 @@ if ! [[ $STUPID_GIT_DEPLOY_SSH =~ ^[A-Za-z0-9/._][A-Za-z0-9/._-]*$ ]]; then
 fi
 
 if [ -n "$(git status --porcelain)" ]; then
-	echo "WARNING: working tree is dirty; the tag will point at committed HEAD, not your uncommitted changes" >&2
+	echo "WARNING: Working tree is dirty; the tag will point at committed HEAD, not your uncommitted changes" >&2
 fi
 
 default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)
