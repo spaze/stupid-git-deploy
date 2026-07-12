@@ -12,7 +12,7 @@ below for exactly what that does and does not buy you.
 ## How it works
 
 1. On your workstation you review what you're about to ship, then run
-   `sign-deploy <site>`. That signs a moving `deploy` tag over your current commit
+   `sign-deploy`. That signs a moving `deploy` tag over your current commit
    (with your SSH key, e.g. from 1Password), force-pushes it, and triggers the
    deploy over ssh.
 2. On the server, `deploy <site>` fetches the tag, checks its signature against a
@@ -75,21 +75,18 @@ failed, and so on) print a message and exit without a log line.
    `git config --global gpg.format ssh` and
    `git config --global user.signingkey key::ssh-ed25519 AAAA...` (or your 1Password
    config). The *public* key must match a line in the server's `allowed_signers`.
-3. Tell `sign-deploy` which server each site deploys to, in
-   `~/.config/deploy/servers` — one `<pattern> <host>` per line, first match wins:
+3. Tell each repository what it deploys and where, with two `git config` values
+   (once per checkout):
+   ```sh
+   git config --local stupid-git-deploy.site michalspacek.cz # what to deploy (the site name)
+   git config --local stupid-git-deploy.host web.example.com # the server to deploy it on
    ```
-   site-one.example     host1.example.com
-   site-two.example     host1.example.com
-   *.staging.example    host1.example.com
-   *                    host2.example.com
-   ```
-   `<host>` is whatever you'd `ssh` to; mapping many sites onto the same host
-   keeps your `known_hosts` small. The first field is usually a literal site
-   name, but may be a glob — `*.staging.example`, or `*` on the last line as an
-   optional catch-all (keep it last: first match wins). Without a catch-all, an
-   unlisted site is an error. Override the file location with
-   `STUPID_GIT_DEPLOY_SERVERS`, or skip the map for a one-off with
-   `STUPID_GIT_DEPLOY_HOST=your.server.example`.
+   Then `sign-deploy` — with no argument — deploys that site. `<host>` is
+   whatever you'd `ssh` to. Pass a site explicitly to override the config
+   (`sign-deploy other.example`), or set
+   `STUPID_GIT_DEPLOY_HOST=your.server.example` for a one-off host. A repository
+   with neither `stupid-git-deploy.site` nor an argument (or with no
+   `stupid-git-deploy.host`) prints how to set them.
 
    By default `sign-deploy` runs `~/.local/bin/deploy` on the server (the `~` is
    expanded there, so it works even if your home directory differs). Set
@@ -104,7 +101,7 @@ failed, and so on) print a message and exit without a log line.
 ```sh
 git pull # get the merged code
 git log --oneline <last>.. # REVIEW what you're about to ship (see below)
-sign-deploy <site> # sign, push the tag, trigger the server
+sign-deploy # sign, push the tag, trigger the server (site from git config)
 ```
 
 Because your signature *is* the authorization, the review step is not optional —
