@@ -42,6 +42,10 @@ if [[ $STUPID_GIT_DEPLOY_HOST == -* ]]; then
 	echo "Invalid host '$STUPID_GIT_DEPLOY_HOST' (must not start with '-')" >&2
 	exit 2
 fi
+if [[ $STUPID_GIT_DEPLOY_HOST == *[[:space:]]* ]]; then
+	echo "Invalid host '$STUPID_GIT_DEPLOY_HOST' (must not contain whitespace)" >&2
+	exit 2
+fi
 STUPID_GIT_DEPLOY_TAG=${STUPID_GIT_DEPLOY_TAG:-deploy}
 if ! [[ $STUPID_GIT_DEPLOY_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
 	echo "Invalid STUPID_GIT_DEPLOY_TAG '$STUPID_GIT_DEPLOY_TAG'" >&2
