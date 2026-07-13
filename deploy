@@ -37,9 +37,9 @@ fail() {
 # Log only fixed words, SHAs, and the validated site, never author/subject,
 # so a crafted commit can't forge log lines. Args: site result tagobj commit prev
 deploy_log() {
-	mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOG")" 2>/dev/null
+	mkdir --parents -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOG")" 2>/dev/null
 	printf 'ts=%s site=%s result=%s tag=%s commit=%s prev=%s\n' \
-		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" >> "$STUPID_GIT_DEPLOY_LOG" 2>/dev/null \
+		"$(date --utc +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" >> "$STUPID_GIT_DEPLOY_LOG" 2>/dev/null \
 		|| echo "WARNING: Could not write audit log $STUPID_GIT_DEPLOY_LOG" >&2
 }
 
@@ -69,9 +69,9 @@ fi
 
 # Don't let two deploys of the same site run at the same time.
 command -v flock >/dev/null 2>&1 || fail "flock not found (install util-linux)"
-mkdir -p -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOCK")" 2>/dev/null
+mkdir --parents -- "$(dirname -- "$STUPID_GIT_DEPLOY_LOCK")" 2>/dev/null
 exec 9>"$STUPID_GIT_DEPLOY_LOCK" || fail "Cannot open lock file $STUPID_GIT_DEPLOY_LOCK"
-flock -n 9 || fail "Could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1 (another deploy may be running)"
+flock --nonblock 9 || fail "Could not acquire deploy lock $STUPID_GIT_DEPLOY_LOCK for $1 (another deploy may be running)"
 
 echo "${BOLD}Deploying ${GREEN}$1${NORMAL}"
 
@@ -113,8 +113,8 @@ fi
 command -v git >/dev/null 2>&1 || fail "Git not found"
 command -v ssh-keygen >/dev/null 2>&1 || fail "ssh-keygen from OpenSSH not found (needed to verify the tag signature)"
 # Git >= 2.34 verifies SSH signatures
-GITVER=$(git --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
-printf '2.34\n%s\n' "$GITVER" | sort -V -C || fail "Git >= 2.34 required for SSH tag verification (have ${GITVER:-unknown})"
+GITVER=$(git --version | grep --only-matching --extended-regexp '[0-9]+\.[0-9]+(\.[0-9]+)?' | head --lines=1)
+printf '2.34\n%s\n' "$GITVER" | sort --version-sort --check=quiet || fail "Git >= 2.34 required for SSH tag verification (have ${GITVER:-unknown})"
 
 # --force: the deploy tag is re-pointed on every deploy
 git fetch --force origin tag "$STUPID_GIT_DEPLOY_TAG" || fail "Could not fetch tag '$STUPID_GIT_DEPLOY_TAG' from origin"
@@ -124,8 +124,8 @@ TAGOBJ=$(git rev-parse --verify "refs/tags/$STUPID_GIT_DEPLOY_TAG" 2>/dev/null) 
 
 [ -r "$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" ] || fail "allowed_signers not found or unreadable: $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS"
 # Empty GNUPGHOME: only $STUPID_GIT_DEPLOY_ALLOWED_SIGNERS decides trust, not any ambient GPG key.
-EMPTY_GNUPGHOME=$(mktemp -d) || fail "Could not create a temporary GNUPGHOME"
-trap 'rm -rf "$EMPTY_GNUPGHOME"' EXIT
+EMPTY_GNUPGHOME=$(mktemp --directory) || fail "Could not create a temporary GNUPGHOME"
+trap 'rm --recursive --force "$EMPTY_GNUPGHOME"' EXIT
 if ! GNUPGHOME="$EMPTY_GNUPGHOME" git -c gpg.ssh.allowedSignersFile="$STUPID_GIT_DEPLOY_ALLOWED_SIGNERS" verify-tag "$TAGOBJ"; then
 	deploy_log "$1" badsig "$TAGOBJ" - "$(git rev-parse HEAD 2>/dev/null)"
 	fail "Tag '$STUPID_GIT_DEPLOY_TAG' ($TAGOBJ) is NOT signed by an authorized key; refusing to deploy"
@@ -168,7 +168,7 @@ if [ -f "$COMPOSER_LOCK" ] && [ -f "$VENDOR_IGNORE" ]; then
 fi
 
 if [ -d "$CACHE_DIR" ]; then
-	sudo rm -r $CACHE_DIR || fail "Could not purge cache $CACHE_DIR"
+	sudo rm --recursive $CACHE_DIR || fail "Could not purge cache $CACHE_DIR"
 	echo "${BOLD}Cache purged${NORMAL}"
 fi
 
@@ -184,7 +184,7 @@ if [ -f "$COMPOSER_JSON" ]; then
 			if [ ! -d "./$VENDOR_DIR/$DEP" ]; then
 				continue
 			fi
-			rm -rf "./$VENDOR_DIR/$DEP"/* || fail "Could not remove dev dependency $DEP"
+			rm --recursive --force "./$VENDOR_DIR/$DEP"/* || fail "Could not remove dev dependency $DEP"
 			echo "Removed by $0" > "./$VENDOR_DIR/$DEP/REMOVED-BY-DEPLOY"
 			echo "├ $DEP removed"
 		done

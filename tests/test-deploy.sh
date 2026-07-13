@@ -71,7 +71,7 @@ c2=$(git_build rev-parse HEAD)
 tag_deploy() {
 	if [ -n "$2" ]; then
 		git_build -c gpg.format=ssh -c user.signingkey="$2" \
-			tag --sign --force --message "deploy $(git_build rev-parse --short "$1")" deploy "$1"
+			tag --sign --force --message "Deploy $(git_build rev-parse --short "$1")" deploy "$1"
 	else
 		git_build tag --force deploy "$1"
 	fi
