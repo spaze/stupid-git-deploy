@@ -79,6 +79,6 @@ fi
 # and SHA expand client-side (intended; the ~ is expanded on the server). The
 # trailing SHA pins the commit we signed so a racing tag update can't swap it.
 # shellcheck disable=SC2029
-git tag --sign --force --message "Deploy $(git rev-parse --short HEAD)" "$STUPID_GIT_DEPLOY_TAG" HEAD \
+git tag --sign --force --message "Deploy $(git rev-parse --short HEAD) $(date -u +%Y-%m-%dT%H:%M:%SZ)" "$STUPID_GIT_DEPLOY_TAG" HEAD \
 	&& git push --force origin "refs/tags/$STUPID_GIT_DEPLOY_TAG" \
 	&& "$STUPID_GIT_DEPLOY_SSH" "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"
