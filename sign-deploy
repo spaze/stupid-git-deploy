@@ -75,10 +75,19 @@ if [ -n "$remote_tip" ] && [ "$(git rev-parse HEAD)" != "$remote_tip" ]; then
 	echo "WARNING: HEAD is not at origin/$default_branch (behind, ahead/unpushed, or diverged); deploying $(git rev-parse --short HEAD) anyway" >&2
 fi
 
-# chained so a failed sign/push never triggers the server. The remote path, site,
-# and SHA expand client-side (intended; the ~ is expanded on the server). The
-# trailing SHA pins the commit we signed so a racing tag update can't swap it.
+# Fail before moving the tag if the deploy host is unreachable.
+if ! "$STUPID_GIT_DEPLOY_SSH" "$STUPID_GIT_DEPLOY_HOST" true >/dev/null; then
+	echo "Cannot reach the deploy host over SSH ('$STUPID_GIT_DEPLOY_SSH' '$STUPID_GIT_DEPLOY_HOST'); nothing signed or pushed" >&2
+	exit 1
+fi
+
+git tag --sign --force --message "Deploy $(git rev-parse --short HEAD) $(date -u +%Y-%m-%dT%H:%M:%SZ)" "$STUPID_GIT_DEPLOY_TAG" HEAD
+git push --force origin "refs/tags/$STUPID_GIT_DEPLOY_TAG"
+
+# The remote path, site, and SHA expand client-side (intended; the ~ is expanded on the server).
+# The trailing SHA pins the commit we signed so a racing tag update can't swap it.
 # shellcheck disable=SC2029
-git tag --sign --force --message "Deploy $(git rev-parse --short HEAD) $(date -u +%Y-%m-%dT%H:%M:%SZ)" "$STUPID_GIT_DEPLOY_TAG" HEAD \
-	&& git push --force origin "refs/tags/$STUPID_GIT_DEPLOY_TAG" \
-	&& "$STUPID_GIT_DEPLOY_SSH" "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"
+if ! "$STUPID_GIT_DEPLOY_SSH" "$STUPID_GIT_DEPLOY_HOST" "$STUPID_GIT_DEPLOY_REMOTE" "$SITE" "$(git rev-parse HEAD)"; then
+	echo "The '$STUPID_GIT_DEPLOY_TAG' tag was signed and pushed, but the deploy did not succeed on '$STUPID_GIT_DEPLOY_HOST' (see the output above). Re-run sign-deploy after fixing the cause, or run '$STUPID_GIT_DEPLOY_REMOTE $SITE' on the server." >&2
+	exit 1
+fi
