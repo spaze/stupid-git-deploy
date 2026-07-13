@@ -170,4 +170,24 @@ exit_code=$?
 contains "HEAD is not at origin/" "$out" "off-branch warning fires"
 exits 0 "$exit_code" "warns but does not block"
 
+testcase "An unreachable deploy host is caught before the tag moves"
+repo=$(deployable)
+out=$( cd "$repo" && STUPID_GIT_DEPLOY_SSH=false bash "$sign_deploy" 2>&1 )
+exit_code=$?
+contains "Cannot reach the deploy host" "$out" "pre-flight failure reported"
+exits 1 "$exit_code" "exits non-zero"
+tagref=$(git -C "$repo" rev-parse --verify --quiet refs/tags/deploy || echo none)
+contains "none" "$tagref" "deploy tag was not created (nothing moved)"
+
+testcase "A failed deploy after a reachable host is reported, with the tag already pushed"
+repo=$(deployable)
+# shellcheck disable=SC2016 # $2 is the stub's own arg, expanded when the stub runs
+printf '#!/bin/sh\ncase "$2" in true) exit 0 ;; *) echo boom >&2; exit 1 ;; esac\n' > "$work/bin/flaky"
+chmod +x "$work/bin/flaky"
+out=$( cd "$repo" && STUPID_GIT_DEPLOY_SSH="$work/bin/flaky" bash "$sign_deploy" 2>&1 )
+exit_code=$?
+contains "did not succeed" "$out" "deploy failure reported clearly"
+exits 1 "$exit_code" "exits non-zero"
+contains "refs/tags/deploy" "$(git -C "$repo" ls-remote origin)" "tag was still pushed (authorization recorded)"
+
 summary
